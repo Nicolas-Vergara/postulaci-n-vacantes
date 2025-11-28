@@ -1,12 +1,350 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bolsa de Trabajo</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Página de Reclutamiento - Demo</title>
+  <meta name="description" content="Página de reclutamiento demo: publicar empleos, buscar, postular y panel de administración sencillo." />
+  <style>
+    /* Reset ligero */
+    *{box-sizing:border-box}body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f5f7fb;color:#0f172a}
+    header{background:linear-gradient(90deg,#0ea5a4,#2563eb);color:white;padding:28px 16px}
+    .container{max-width:1100px;margin:0 auto;padding:20px}
+    h1{margin:0;font-size:1.8rem}
+    p.lead{opacity:.9}
+
+    /* Layout */
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:24px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+    /* Buscador y filtros */
+    .controls{display:flex;gap:8px;margin:16px 0}
+    .controls input,.controls select{padding:10px;border-radius:8px;border:1px solid #e2e8f0;flex:1}
+    .controls button{background:#2563eb;color:white;padding:10px 14px;border:none;border-radius:8px;cursor:pointer}
+
+    /* Tarjetas de vacantes */
+    .jobs {display:grid;gap:14px}
+    .job{background:white;padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(12,17,43,0.06);display:flex;justify-content:space-between;align-items:center}
+    .job .meta{max-width:70%}
+    .job h3{margin:0 0 6px;font-size:1.05rem}
+    .job p{margin:0;color:#475569}
+    .job .tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+    .tag{background:#eef2ff;padding:6px 8px;border-radius:999px;font-size:.78rem}
+    .apply-btn{background:#06b6d4;color:white;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+
+    /* Sidebar */
+    aside.card{background:white;padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(12,17,43,0.04)}
+    .small{font-size:.88rem;color:#475569}
+
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.5);display:none;align-items:center;justify-content:center;padding:20px}
+    .modal{background:white;padding:18px;border-radius:12px;max-width:680px;width:100%;box-shadow:0 8px 30px rgba(2,6,23,0.25)}
+    .modal h2{margin-top:0}
+    .field{display:flex;flex-direction:column;margin-bottom:10px}
+    .field label{font-weight:600;margin-bottom:6px}
+    .field input,.field textarea,.field select{padding:10px;border-radius:8px;border:1px solid #e2e8f0}
+    .row{display:flex;gap:8px}
+    .row .field{flex:1}
+    .close{background:#ef4444;color:white;border:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+    .save{background:#10b981;color:white;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+
+    /* Applicants table */
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #e6eef8;text-align:left}
+    th{background:#f1f5f9}
+
+    footer{padding:20px;text-align:center;color:#64748b}
+
+    /* tiny helpers */
+    .muted{color:#64748b;font-size:.9rem}
+    .center{text-align:center}
+  </style>
 </head>
 <body>
-    <h1>Bienvenido a la Bolsa de Trabajo</h1>
-    <p>Esta página está funcionando correctamente desde GitHub Pages.</p>
+  <header>
+    <div class="container">
+      <h1>Página de Reclutamiento — Demo</h1>
+      <p class="lead">Publica vacantes, deja que candidatos se postulen y administra postulaciones (demo local).</p>
+    </div>
+  </header>
+
+  <main class="container" style="margin-top:18px">
+    <div class="grid">
+      <section>
+        <div class="controls">
+          <input id="search" placeholder="Buscar por título o palabra clave" />
+          <select id="filter-category">
+            <option value="">Todas las categorías</option>
+          </select>
+          <button id="btnNewJob">+ Publicar Vacante</button>
+        </div>
+
+        <div class="jobs" id="jobsList">
+          <!-- Vacantes se renderizan aquí -->
+        </div>
+
+        <div style="margin-top:18px" class="muted">Demo: los datos se guardan en <code>localStorage</code>. No hay backend.</div>
+      </section>
+
+      <aside>
+        <div class="card">
+          <h3>Panel rápido</h3>
+          <p class="small">Número de vacantes: <strong id="countJobs">0</strong></p>
+          <p class="small">Postulaciones totales: <strong id="countApplicants">0</strong></p>
+          <hr />
+          <div class="small">
+            <label>Ver panel de administracion</label>
+            <input id="adminPass" placeholder="Contraseña (demo)" />
+            <button id="btnAdmin" style="margin-top:8px">Entrar</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Modal de aplicar / crear vacante -->
+    <div id="modalBackdrop" class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <button class="close" id="closeModal" style="float:right">X</button>
+        <h2 id="modalTitle">Aplicar</h2>
+        <form id="applyForm">
+          <input type="hidden" id="jobId" />
+          <div class="field">
+            <label for="fullname">Nombre completo</label>
+            <input id="fullname" required />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="email">Correo</label>
+              <input id="email" type="email" required />
+            </div>
+            <div class="field">
+              <label for="phone">Teléfono</label>
+              <input id="phone" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="resume">Currículum (archivo) — no se envía a servidor en demo</label>
+            <input id="resume" type="file" accept=".pdf,.doc,.docx,.txt" />
+          </div>
+          <div class="field">
+            <label for="message">Mensaje / Carta de presentación</label>
+            <textarea id="message" rows="4"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button type="button" class="close" id="cancelApply">Cancelar</button>
+            <button type="submit" class="save">Enviar Postulación</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal admin -->
+    <div id="adminView" style="display:none;margin-top:18px">
+      <div class="card">
+        <h3>Panel de Administración (Demo)</h3>
+        <p class="small">Contraseña demo aceptada: <code>admin123</code></p>
+        <h4>Postulaciones</h4>
+        <div id="applicantsArea">No hay postulaciones.</div>
+        <div style="margin-top:10px">
+          <button id="exportCSV">Exportar CSV</button>
+          <button id="clearAll">Borrar todo (vacantes + postulaciones)</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    Demo creada para aprendizaje — funciona completamente en el navegador y localStorage.
+  </footer>
+
+  <script>
+    // --- Datos iniciales de ejemplo ---
+    const sampleJobs = [
+      {id: 'job-1', title: 'Desarrollador Frontend', company: 'Acme Tech', location: 'CDMX', category: 'Desarrollo', desc: 'React, JS, HTML/CSS', posted: '2025-11-01'},
+      {id: 'job-2', title: 'Diseñador UX/UI', company: 'Studio Creativo', location: 'Remoto', category: 'Diseño', desc: 'Figma, prototipos', posted: '2025-10-21'},
+      {id: 'job-3', title: 'Analista de Datos', company: 'Datos S.A.', location: 'Guadalajara', category: 'Datos', desc: 'Python, SQL', posted: '2025-11-12'}
+    ];
+
+    // --- Helpers de almacenamiento ---
+    const LS_JOBS = 'reclutamiento_jobs_v1';
+    const LS_APPS = 'reclutamiento_apps_v1';
+
+    function getJobs(){
+      const raw = localStorage.getItem(LS_JOBS);
+      return raw ? JSON.parse(raw) : sampleJobs.slice();
+    }
+    function saveJobs(jobs){ localStorage.setItem(LS_JOBS, JSON.stringify(jobs)); }
+    function getApps(){ const raw = localStorage.getItem(LS_APPS); return raw?JSON.parse(raw):[] }
+    function saveApps(apps){ localStorage.setItem(LS_APPS, JSON.stringify(apps)); }
+
+    // --- Render ---
+    const jobsList = document.getElementById('jobsList');
+    const countJobs = document.getElementById('countJobs');
+    const countApplicants = document.getElementById('countApplicants');
+    const filterCategory = document.getElementById('filter-category');
+    const searchInput = document.getElementById('search');
+
+    function renderJobs(filterText = '', category=''){
+      const jobs = getJobs();
+      const filtered = jobs.filter(j=>{
+        const matchesText = !filterText || (j.title+j.company+j.desc).toLowerCase().includes(filterText.toLowerCase());
+        const matchesCat = !category || j.category === category;
+        return matchesText && matchesCat;
+      });
+      jobsList.innerHTML = '';
+      filtered.forEach(j=>{
+        const div = document.createElement('div'); div.className='job';
+        div.innerHTML = `\
+          <div class=\"meta\">\
+            <h3>${j.title} <small class=\"muted\">— ${j.company}</small></h3>\
+            <p>${j.desc} · ${j.location}</p>\
+            <div class=\"tags\">\
+              <span class=\"tag\">${j.category}</span>\
+              <span class=\"tag\">Publicado: ${j.posted}</span>\
+            </div>\
+          </div>\
+          <div>\
+            <button class=\"apply-btn\" data-id=\"${j.id}\">Postular</button>\
+          </div>`;
+        jobsList.appendChild(div);
+      });
+      countJobs.textContent = jobs.length;
+      countApplicants.textContent = getApps().length;
+    }
+
+    function populateCategories(){
+      const jobs = getJobs();
+      const cats = Array.from(new Set(jobs.map(j=>j.category)));
+      filterCategory.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    }
+
+    // --- Eventos buscador y filtros ---
+    searchInput.addEventListener('input', ()=>renderJobs(searchInput.value, filterCategory.value));
+    filterCategory.addEventListener('change', ()=>renderJobs(searchInput.value, filterCategory.value));
+
+    // --- Modal aplicar ---
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalTitle = document.getElementById('modalTitle');
+    const jobIdInput = document.getElementById('jobId');
+    const applyForm = document.getElementById('applyForm');
+    const closeModal = document.getElementById('closeModal');
+    document.getElementById('cancelApply').addEventListener('click',()=>hideModal());
+    closeModal.addEventListener('click',()=>hideModal());
+
+    function showModalForJob(jobId){
+      const jobs = getJobs();
+      const job = jobs.find(j=>j.id===jobId);
+      modalTitle.textContent = 'Postular a: ' + (job?job.title:'Vacante');
+      jobIdInput.value = jobId;
+      modalBackdrop.style.display = 'flex';
+    }
+    function hideModal(){ modalBackdrop.style.display = 'none'; applyForm.reset(); }
+
+    jobsList.addEventListener('click', (e)=>{
+      if(e.target.matches('.apply-btn')){
+        const id = e.target.dataset.id; showModalForJob(id);
+      }
+    });
+
+    // --- Enviar postulación ---
+    applyForm.addEventListener('submit', (ev)=>{
+      ev.preventDefault();
+      const apps = getApps();
+      const newApp = {
+        id: 'app-' + Date.now(),
+        jobId: jobIdInput.value || null,
+        fullname: document.getElementById('fullname').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        message: document.getElementById('message').value,
+        received: new Date().toISOString()
+      };
+      // No subimos archivo en demo; si está, guardamos nombre
+      const resumeEl = document.getElementById('resume');
+      if(resumeEl.files && resumeEl.files[0]) newApp.resumeName = resumeEl.files[0].name;
+      apps.push(newApp); saveApps(apps);
+      alert('Postulación enviada. En demo queda guardada solo en tu navegador.');
+      hideModal(); renderJobs(searchInput.value, filterCategory.value);
+    });
+
+    // --- Publicar nueva vacante (modal simple) ---
+    document.getElementById('btnNewJob').addEventListener('click', ()=>{
+      // reutilizamos el modal para crear vacante: cambiamos contenido dinámicamente
+      modalTitle.textContent = 'Publicar nueva vacante';
+      jobIdInput.value = '';
+      modalBackdrop.style.display = 'flex';
+      // transform form for creating job
+      document.getElementById('fullname').value = '';
+      document.getElementById('email').value = '';
+      document.getElementById('phone').value = '';
+      document.getElementById('message').value = '';
+
+      // Small hack: repurpose submit to create job when title is empty
+      // Ask user for minimal info via prompt for demo
+      setTimeout(()=>{
+        const title = prompt('Título de la vacante (ej. Desarrollador Backend)');
+        if(!title){ hideModal(); return; }
+        const company = prompt('Empresa');
+        const category = prompt('Categoría (ej. Desarrollo, Diseño, Datos)') || 'General';
+        const location = prompt('Ubicación (ej. Remoto, CDMX)') || 'Remoto';
+        const desc = prompt('Descripción corta') || '';
+        const jobs = getJobs();
+        const newJob = {id:'job-'+Date.now(), title, company:company||'Empresa', category, location, desc, posted: new Date().toISOString().slice(0,10)};
+        jobs.unshift(newJob); saveJobs(jobs); populateCategories(); renderJobs(); hideModal();
+      },200);
+    });
+
+    // --- Admin ---
+    document.getElementById('btnAdmin').addEventListener('click', ()=>{
+      const pass = document.getElementById('adminPass').value;
+      if(pass === 'admin123'){
+        document.getElementById('adminView').style.display = 'block';
+        renderAdmin(); window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'});
+      } else { alert('Contraseña incorrecta (demo).') }
+    });
+
+    function renderAdmin(){
+      const apps = getApps();
+      const jobs = getJobs();
+      const area = document.getElementById('applicantsArea');
+      if(!apps.length){ area.innerHTML = '<div class="muted">No hay postulaciones aún.</div>'; return; }
+      let html = '<table><thead><tr><th>Fecha</th><th>Nombre</th><th>Email</th><th>Vacante</th><th>Archivo</th></tr></thead><tbody>';
+      apps.forEach(a=>{
+        const job = jobs.find(j=>j.id===a.jobId);
+        html += `<tr><td>${new Date(a.received).toLocaleString()}</td><td>${a.fullname}</td><td>${a.email}</td><td>${job?job.title:'-'}</td><td>${a.resumeName||'-'}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      area.innerHTML = html;
+    }
+
+    // --- Export CSV & Clear ---
+    document.getElementById('exportCSV').addEventListener('click', ()=>{
+      const apps = getApps(); if(!apps.length){ alert('No hay postulaciones para exportar'); return; }
+      const rows = ['fecha,nombre,email,vacante,archivo,message'];
+      const jobs = getJobs();
+      apps.forEach(a=>{
+        const job = jobs.find(j=>j.id===a.jobId);
+        const line = [new Date(a.received).toISOString(), a.fullname, a.email, (job?job.title:'-'), (a.resumeName||''), (a.message||'')].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+        rows.push(line);
+      });
+      const blob = new Blob([rows.join('\n')],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'postulaciones.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('clearAll').addEventListener('click', ()=>{
+      if(confirm('Borrar todo eliminará vacantes y postulaciones en este navegador. Continuar?')){
+        localStorage.removeItem(LS_JOBS); localStorage.removeItem(LS_APPS); alert('Datos borrados de localStorage. Recarga la página.');
+        location.reload();
+      }
+    });
+
+    // --- Inicialización ---
+    populateCategories(); renderJobs();
+
+    // Keep counts updated when storage changes in other tabs
+    window.addEventListener('storage', ()=>{ renderJobs(); populateCategories(); renderAdmin(); });
+  </script>
 </body>
 </html>
